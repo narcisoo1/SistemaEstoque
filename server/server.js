@@ -1,8 +1,12 @@
-const express = require('express');
-const mysql = require('mysql2/promise');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+import express from 'express';
+import mysql from 'mysql2/promise';
+import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { authenticateToken } from './middleware/auth.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 const PORT = 3002;
@@ -11,20 +15,20 @@ const PORT = 3002;
 app.use(cors());
 app.use(express.json());
 
-// Database configuration
+// Diretório atual (substituto de __dirname)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Configuração do banco de dados
 const dbConfig = {
   host: 'localhost',
   user: 'root',
-  password: '', // Altere conforme sua configuração
+  password: 'admin',
   database: 'inventory_system',
-  charset: 'utf8mb4'
+  charset: 'utf8mb4',
 };
 
-// JWT Secret
-const JWT_SECRET = 'seu_jwt_secret_aqui_mude_em_producao';
-
-// Database connection
-let db;
+export let db;
 
 async function initDatabase() {
   try {
@@ -35,42 +39,6 @@ async function initDatabase() {
     process.exit(1);
   }
 }
-
-// Auth middleware
-const authenticateToken = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Token de acesso requerido' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [decoded.userId]);
-    
-    if (rows.length === 0) {
-      return res.status(401).json({ error: 'Usuário não encontrado' });
-    }
-
-    req.user = rows[0];
-    next();
-  } catch (error) {
-    return res.status(403).json({ error: 'Token inválido' });
-  }
-};
-
-// Role-based access control
-const requireRole = (roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Acesso negado' });
-    }
-    next();
-  };
-};
-
-// Routes
 
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
@@ -105,60 +73,29 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   res.json(userWithoutPassword);
 });
 
-// Dashboard routes
-app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
+// --- Rotas públicas, sem autenticação ---
+
+// Estatísticas do dashboard
+app.get('/api/dashboard/stats', async (req, res) => {
   try {
     const stats = {};
-
-    // Total materials
     const [materialsCount] = await db.execute('SELECT COUNT(*) as count FROM materials');
     stats.totalMaterials = materialsCount[0].count;
 
-    // Pending requests
-    let pendingQuery = 'SELECT COUNT(*) as count FROM requests WHERE status = "pendente"';
-    if (req.user.role === 'solicitante') {
-      pendingQuery += ' AND requester_id = ?';
-      const [pendingCount] = await db.execute(pendingQuery, [req.user.id]);
-      stats.pendingRequests = pendingCount[0].count;
-    } else {
-      const [pendingCount] = await db.execute(pendingQuery);
-      stats.pendingRequests = pendingCount[0].count;
-    }
+    const [pendingCount] = await db.execute('SELECT COUNT(*) as count FROM requests WHERE status = "pendente"');
+    stats.pendingRequests = pendingCount[0].count;
 
-    // Low stock items
-    if (['despachante', 'administrador'].includes(req.user.role)) {
-      const [lowStockCount] = await db.execute('SELECT COUNT(*) as count FROM materials WHERE current_stock <= min_stock');
-      stats.lowStockItems = lowStockCount[0].count;
-    } else {
-      stats.lowStockItems = 0;
-    }
+    const [lowStockCount] = await db.execute('SELECT COUNT(*) as count FROM materials WHERE current_stock <= min_stock');
+    stats.lowStockItems = lowStockCount[0].count;
 
-    // Total users (admin only)
-    if (req.user.role === 'administrador') {
-      const [usersCount] = await db.execute('SELECT COUNT(*) as count FROM users');
-      stats.totalUsers = usersCount[0].count;
-    } else {
-      stats.totalUsers = 0;
-    }
+    const [usersCount] = await db.execute('SELECT COUNT(*) as count FROM users');
+    stats.totalUsers = usersCount[0].count;
 
-    // Recent entries
-    if (['despachante', 'administrador'].includes(req.user.role)) {
-      const [entriesCount] = await db.execute('SELECT COUNT(*) as count FROM stock_entries WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)');
-      stats.recentEntries = entriesCount[0].count;
-    } else {
-      stats.recentEntries = 0;
-    }
+    const [entriesCount] = await db.execute('SELECT COUNT(*) as count FROM stock_entries WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)');
+    stats.recentEntries = entriesCount[0].count;
 
-    // Monthly requests
-    let monthlyQuery = 'SELECT COUNT(*) as count FROM requests WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE())';
-    if (req.user.role === 'solicitante') {
-      monthlyQuery += ' AND requester_id = ?';
-      const [monthlyCount] = await db.execute(monthlyQuery, [req.user.id]);
-      stats.monthlyRequests = monthlyCount[0].count;
-    } else {
-      const [monthlyCount] = await db.execute(monthlyQuery);
-      stats.monthlyRequests = monthlyCount[0].count;
-    }
+    const [monthlyCount] = await db.execute('SELECT COUNT(*) as count FROM requests WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE())');
+    stats.monthlyRequests = monthlyCount[0].count;
 
     res.json(stats);
   } catch (error) {
@@ -167,8 +104,8 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// Materials routes
-app.get('/api/materials', authenticateToken, requireRole(['despachante', 'administrador']), async (req, res) => {
+// Rotas de materiais
+app.get('/api/materials', async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT * FROM materials ORDER BY name');
     res.json(rows);
@@ -178,15 +115,13 @@ app.get('/api/materials', authenticateToken, requireRole(['despachante', 'admini
   }
 });
 
-app.post('/api/materials', authenticateToken, requireRole(['despachante', 'administrador']), async (req, res) => {
+app.post('/api/materials', async (req, res) => {
   try {
     const { name, category, unit, minStock, description } = req.body;
-    
     const [result] = await db.execute(
       'INSERT INTO materials (name, category, unit, current_stock, min_stock, description) VALUES (?, ?, ?, 0, ?, ?)',
       [name, category, unit, minStock, description || null]
     );
-
     res.status(201).json({ id: result.insertId, message: 'Material criado com sucesso' });
   } catch (error) {
     console.error('Erro ao criar material:', error);
@@ -194,11 +129,11 @@ app.post('/api/materials', authenticateToken, requireRole(['despachante', 'admin
   }
 });
 
-app.put('/api/materials/:id', authenticateToken, requireRole(['despachante', 'administrador']), async (req, res) => {
+app.put('/api/materials/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, category, unit, minStock, description } = req.body;
-    
+
     await db.execute(
       'UPDATE materials SET name = ?, category = ?, unit = ?, min_stock = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [name, category, unit, minStock, description || null, id]
@@ -211,14 +146,12 @@ app.put('/api/materials/:id', authenticateToken, requireRole(['despachante', 'ad
   }
 });
 
-app.delete('/api/materials/:id', authenticateToken, requireRole(['despachante', 'administrador']), async (req, res) => {
+app.delete('/api/materials/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Check if material is used in any requests or entries
     const [requestItems] = await db.execute('SELECT COUNT(*) as count FROM request_items WHERE material_id = ?', [id]);
     const [stockEntries] = await db.execute('SELECT COUNT(*) as count FROM stock_entries WHERE material_id = ?', [id]);
-    
+
     if (requestItems[0].count > 0 || stockEntries[0].count > 0) {
       return res.status(400).json({ error: 'Não é possível excluir material que possui histórico de movimentação' });
     }
@@ -231,16 +164,82 @@ app.delete('/api/materials/:id', authenticateToken, requireRole(['despachante', 
   }
 });
 
-// Error handling middleware
+app.get('/api/requests/summary', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        id,
+        status,
+        priority,
+        created_at,
+        requester_name,
+        school,
+        approver_name,
+        dispatcher_name,
+        items_count,
+        total_requested,
+        total_dispatched
+      FROM request_summary
+      ORDER BY created_at DESC
+    `;
+
+  // GET /api/materials/search?query=lapis
+  app.get('/api/materials/search', async (req, res) => {
+    const { query } = req.query;
+    try {
+      const [rows] = await db.execute(`
+        SELECT id, name, quantity 
+        FROM materials 
+        WHERE name LIKE ? 
+        ORDER BY name ASC
+        LIMIT 20
+      `, [`%${query}%`]);
+      res.json(rows);
+    } catch (err) {
+      console.error('Erro ao buscar materiais:', err);
+      res.status(500).json({ error: 'Erro ao buscar materiais' });
+    }
+  });
+
+
+    const [rows] = await db.execute(query);
+
+    // Mapear os dados para o formato esperado no frontend (opcional, para camelCase)
+    const requests = rows.map(row => ({
+      id: row.id,
+      status: row.status,
+      priority: row.priority,
+      createdAt: row.created_at,
+      requester: {
+        name: row.requester_name,
+        school: row.school,
+      },
+      approverName: row.approver_name,
+      dispatcherName: row.dispatcher_name,
+      itemsCount: row.items_count,
+      totalRequested: row.total_requested,
+      totalDispatched: row.total_dispatched,
+    }));
+
+    res.json(requests);
+
+  } catch (error) {
+    console.error('Erro ao buscar resumo das solicitações:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Middleware de erro
 app.use((error, req, res, next) => {
   console.error('Erro não tratado:', error);
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
 
-// Start server
+
+// Iniciar servidor
 async function startServer() {
   await initDatabase();
-  
+
   app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     console.log(`API disponível em http://localhost:${PORT}/api`);

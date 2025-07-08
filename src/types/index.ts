@@ -12,11 +12,9 @@ export interface Material {
   name: string;
   category: string;
   unit: string;
-  currentStock: number;
-  minStock: number;
+  current_stock: number;
+  min_stock: number;
   description?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface Supplier {

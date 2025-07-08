@@ -8,7 +8,7 @@ import {
   Building2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import api from '../../services/api';
+import { dashboardApi } from '../../services/mockApi';
 
 interface DashboardStats {
   totalMaterials: number;
@@ -37,8 +37,8 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await api.get('/dashboard/stats');
-      setStats(response.data);
+      const response = await dashboardApi.getStats();
+      setStats(response);
     } catch (error) {
       console.error('Erro ao carregar dados do dashboard:', error);
     } finally {
@@ -189,6 +189,61 @@ const Dashboard = () => {
           </button>
         </div>
       )}
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {user?.role === 'solicitante' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
+            <div className="space-y-3">
+              <button
+                onClick={() => window.location.href = '/requests/new'}
+                className="w-full text-left px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <div className="flex items-center">
+                  <ShoppingCart className="h-5 w-5 mr-3" />
+                  <span>Nova Solicitação</span>
+                </div>
+              </button>
+              <button
+                onClick={() => window.location.href = '/requests'}
+                className="w-full text-left px-4 py-3 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center">
+                  <Package className="h-5 w-5 mr-3" />
+                  <span>Minhas Solicitações</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {['despachante', 'administrador'].includes(user?.role || '') && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
+            <div className="space-y-3">
+              <button
+                onClick={() => window.location.href = '/stock-entries/new'}
+                className="w-full text-left px-4 py-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
+              >
+                <div className="flex items-center">
+                  <TrendingUp className="h-5 w-5 mr-3" />
+                  <span>Entrada de Estoque</span>
+                </div>
+              </button>
+              <button
+                onClick={() => window.location.href = '/requests'}
+                className="w-full text-left px-4 py-3 bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors"
+              >
+                <div className="flex items-center">
+                  <ShoppingCart className="h-5 w-5 mr-3" />
+                  <span>Aprovar Solicitações</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

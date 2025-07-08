@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Package, AlertTriangle, Edit3, Trash2 } from 'lucide-react';
 import { Material } from '../../types';
-import api from '../../services/api';
+import { materialsService } from '../../services/materialsService';
 
 const MaterialsList = () => {
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [filteredMaterials, setFilteredMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -16,7 +16,7 @@ const MaterialsList = () => {
     name: '',
     category: '',
     unit: '',
-    minStock: 0,
+    min_stock: 0,
     description: '',
   });
 
@@ -33,22 +33,21 @@ const MaterialsList = () => {
     fetchMaterials();
   }, []);
 
-  useEffect(() => {
-    filterMaterials();
-  }, [materials, searchTerm, categoryFilter]);
-
   const fetchMaterials = async () => {
+    setLoading(true);
+    setErrorMessage('');
     try {
-      const response = await api.get('/materials');
-      setMaterials(response.data);
+      const response = await materialsService.getAll();
+      setMaterials(response);
     } catch (error) {
       console.error('Erro ao carregar materiais:', error);
+      setErrorMessage('Erro ao carregar materiais. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
-  const filterMaterials = () => {
+  const filteredMaterials = useMemo(() => {
     let filtered = materials;
 
     if (searchTerm) {
@@ -62,23 +61,31 @@ const MaterialsList = () => {
       filtered = filtered.filter(material => material.category === categoryFilter);
     }
 
-    setFilteredMaterials(filtered);
-  };
+    return filtered;
+  }, [materials, searchTerm, categoryFilter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
     try {
+      // Garante minStock válido
+      const dataToSend = {
+        ...formData,
+        minStock: Number(formData.min_stock) || 0,
+      };
+
       if (editingMaterial) {
-        await api.put(`/materials/${editingMaterial.id}`, formData);
+        await materialsService.update(editingMaterial.id, dataToSend);
       } else {
-        await api.post('/materials', formData);
+        await materialsService.create(dataToSend);
       }
       setShowForm(false);
       setEditingMaterial(null);
-      setFormData({ name: '', category: '', unit: '', minStock: 0, description: '' });
+      setFormData({ name: '', category: '', unit: '', min_stock: 0, description: '' });
       fetchMaterials();
     } catch (error) {
       console.error('Erro ao salvar material:', error);
+      setErrorMessage('Erro ao salvar material. Tente novamente.');
     }
   };
 
@@ -88,7 +95,7 @@ const MaterialsList = () => {
       name: material.name,
       category: material.category,
       unit: material.unit,
-      minStock: material.minStock,
+      min_stock: material.min_stock,
       description: material.description || '',
     });
     setShowForm(true);
@@ -96,15 +103,32 @@ const MaterialsList = () => {
 
   const handleDelete = async (id: number) => {
     if (window.confirm('Tem certeza que deseja excluir este material?')) {
+      setErrorMessage('');
       try {
-        await api.delete(`/materials/${id}`);
+        await materialsService.delete(id);
         fetchMaterials();
       } catch (error) {
         console.error('Erro ao excluir material:', error);
+        setErrorMessage('Erro ao excluir material. Tente novamente.');
       }
     }
   };
 
+  const openNewForm = () => {
+    setShowForm(true);
+    setEditingMaterial(null);
+    setFormData({ name: '', category: '', unit: '', min_stock: 0, description: '' });
+    // Reseta filtros para facilitar visualização do novo material
+    setSearchTerm('');
+    setCategoryFilter('');
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingMaterial(null);
+    setFormData({ name: '', category: '', unit: '', min_stock: 0, description: '' });
+    setErrorMessage('');
+  };
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -118,17 +142,19 @@ const MaterialsList = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Materiais</h1>
         <button
-          onClick={() => {
-            setShowForm(true);
-            setEditingMaterial(null);
-            setFormData({ name: '', category: '', unit: '', minStock: 0, description: '' });
-          }}
+          onClick={openNewForm}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
         >
           <Plus size={20} />
           <span>Novo Material</span>
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="text-red-600 font-medium mb-4">
+          {errorMessage}
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
@@ -214,13 +240,13 @@ const MaterialsList = () => {
                     {material.unit}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {material.currentStock.toLocaleString()}
+                    {Math.round(material.current_stock)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {material.minStock.toLocaleString()}
+                    {Math.round(material.min_stock)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {material.currentStock <= material.minStock ? (
+                    {material.current_stock <= material.min_stock ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         <AlertTriangle className="w-3 h-3 mr-1" />
                         Estoque Baixo
@@ -234,12 +260,14 @@ const MaterialsList = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
                       <button
+                        aria-label={`Editar material ${material.name}`}
                         onClick={() => handleEdit(material)}
                         className="text-blue-600 hover:text-blue-900 p-1"
                       >
                         <Edit3 size={16} />
                       </button>
                       <button
+                        aria-label={`Excluir material ${material.name}`}
                         onClick={() => handleDelete(material.id)}
                         className="text-red-600 hover:text-red-900 p-1"
                       >
@@ -249,21 +277,45 @@ const MaterialsList = () => {
                   </td>
                 </tr>
               ))}
+              {filteredMaterials.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                    Nenhum material encontrado.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={closeForm}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+        >
+          <div
+            className="bg-white rounded-lg p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()} // evita fechar ao clicar dentro do modal
+          >
+            <h2 id="modal-title" className="text-lg font-medium text-gray-900 mb-4">
               {editingMaterial ? 'Editar Material' : 'Novo Material'}
             </h2>
+
+            {errorMessage && (
+              <div className="text-red-600 font-medium mb-4">{errorMessage}</div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <label className="block text-sm font-medium text-gray-700" htmlFor="name">
+                  Nome
+                </label>
                 <input
+                  id="name"
                   type="text"
                   required
                   value={formData.name}
@@ -272,14 +324,17 @@ const MaterialsList = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Categoria</label>
+                <label className="block text-sm font-medium text-gray-700" htmlFor="category">
+                  Categoria
+                </label>
                 <select
+                  id="category"
                   required
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">Selecione uma categoria</option>
+                  <option value="">Selecione</option>
                   {categories.map((category) => (
                     <option key={category} value={category}>
                       {category}
@@ -288,49 +343,59 @@ const MaterialsList = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Unidade</label>
+                <label className="block text-sm font-medium text-gray-700" htmlFor="unit">
+                  Unidade
+                </label>
                 <input
+                  id="unit"
                   type="text"
                   required
-                  placeholder="Ex: kg, unidade, litro"
                   value={formData.unit}
                   onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                   className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Estoque Mínimo</label>
+                <label className="block text-sm font-medium text-gray-700" htmlFor="minStock">
+                  Estoque Mínimo
+                </label>
                 <input
+                  id="minStock"
                   type="number"
-                  required
-                  min="0"
-                  value={formData.minStock}
-                  onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) })}
+                  min={0}
+                  value={Math.round(formData.min_stock)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, min_stock: val === '' ? 0 : parseInt(val) });
+                  }}
                   className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Descrição</label>
+                <label className="block text-sm font-medium text-gray-700" htmlFor="description">
+                  Descrição
+                </label>
                 <textarea
+                  id="description"
+                  rows={3}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
+                ></textarea>
               </div>
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end space-x-2">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={closeForm}
+                  className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
                 >
-                  {editingMaterial ? 'Atualizar' : 'Criar'}
+                  {editingMaterial ? 'Salvar' : 'Criar'}
                 </button>
               </div>
             </form>

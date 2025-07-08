@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthContextType } from '../types';
-import api from '../services/api';
+import { authApi } from '../services/mockApi';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -23,7 +23,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
     } else {
       setLoading(false);
@@ -32,11 +31,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUser = async () => {
     try {
-      const response = await api.get('/auth/me');
-      setUser(response.data);
+      const userData = await authApi.me();
+      setUser(userData);
     } catch (error) {
       localStorage.removeItem('token');
-      delete api.defaults.headers.common['Authorization'];
     } finally {
       setLoading(false);
     }
@@ -44,23 +42,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await api.post('/auth/login', { email, password });
-      const { token, user: userData } = response.data;
+      const response = await authApi.login(email, password);
       
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(userData);
+      if (response) {
+        localStorage.setItem('token', response.token);
+        setUser(response.user);
+        return true;
+      }
       
-      return true;
+      return false;
     } catch (error) {
       return false;
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    delete api.defaults.headers.common['Authorization'];
-    setUser(null);
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      localStorage.removeItem('token');
+      setUser(null);
+    }
   };
 
   const value: AuthContextType = {
@@ -69,6 +71,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     loading,
   };
+
+  console.log(value);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
