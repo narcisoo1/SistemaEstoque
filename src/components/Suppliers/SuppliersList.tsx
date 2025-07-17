@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Building2, Edit3, Trash2, Mail, Phone, MapPin } from 'lucide-react';
+import { Plus, Search, Building2, Edit3, Trash2, Mail, Phone, MapPin, AlertTriangle } from 'lucide-react';
 import { Supplier } from '../../types';
-import { suppliersApi } from '../../services/mockApi';
+import { suppliersApi } from '../../services/api';
 
 const SuppliersList = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
@@ -28,10 +29,13 @@ const SuppliersList = () => {
 
   const fetchSuppliers = async () => {
     try {
-      const response = await suppliersApi.getAll();
-      setSuppliers(response);
-    } catch (error) {
-      console.error('Erro ao carregar fornecedores:', error);
+      setLoading(true);
+      setError(null);
+      const data = await suppliersApi.getAll();
+      setSuppliers(data);
+    } catch (err) {
+      console.error('Erro ao carregar fornecedores:', err);
+      setError('Falha ao carregar a lista de fornecedores');
     } finally {
       setLoading(false);
     }
@@ -39,15 +43,13 @@ const SuppliersList = () => {
 
   const filterSuppliers = () => {
     let filtered = suppliers;
-
     if (searchTerm) {
       filtered = filtered.filter(supplier =>
         supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        supplier.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        supplier.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+        (supplier.email && supplier.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (supplier.phone && supplier.phone.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
-
     setFilteredSuppliers(filtered);
   };
 
@@ -62,9 +64,10 @@ const SuppliersList = () => {
       setShowForm(false);
       setEditingSupplier(null);
       setFormData({ name: '', email: '', phone: '', address: '' });
-      fetchSuppliers();
+      await fetchSuppliers();
     } catch (error) {
       console.error('Erro ao salvar fornecedor:', error);
+      setError(editingSupplier ? 'Erro ao atualizar fornecedor' : 'Erro ao criar fornecedor');
     }
   };
 
@@ -83,17 +86,19 @@ const SuppliersList = () => {
     if (window.confirm('Tem certeza que deseja excluir este fornecedor?')) {
       try {
         await suppliersApi.delete(id);
-        fetchSuppliers();
+        await fetchSuppliers();
       } catch (error) {
         console.error('Erro ao excluir fornecedor:', error);
+        setError('Não foi possível excluir o fornecedor. Ele pode estar em uso.');
       }
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <p className="text-gray-600">Carregando fornecedores...</p>
       </div>
     );
   }
@@ -114,6 +119,19 @@ const SuppliersList = () => {
           <span>Novo Fornecedor</span>
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
@@ -226,11 +244,16 @@ const SuppliersList = () => {
                   rows={3}
                 />
               </div>
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingSupplier(null);
+                    setFormData({ name: '', email: '', phone: '', address: '' });
+                    setError(null);
+                  }}
+                  className="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 transition-colors"
                 >
                   Cancelar
                 </button>
@@ -238,7 +261,7 @@ const SuppliersList = () => {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  {editingSupplier ? 'Atualizar' : 'Criar'}
+                  {editingSupplier ? 'Salvar' : 'Adicionar'}
                 </button>
               </div>
             </form>

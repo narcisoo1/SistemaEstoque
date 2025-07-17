@@ -12,9 +12,11 @@ export interface Material {
   name: string;
   category: string;
   unit: string;
-  current_stock: number;
-  min_stock: number;
+  currentStock: number;
+  minStock: number;
   description?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Supplier {
@@ -37,6 +39,7 @@ export interface StockEntry {
   notes?: string;
   createdBy: number;
   createdAt: string;
+  createdUser: string;
   material?: Material;
   supplier?: Supplier;
   user?: User;
@@ -58,6 +61,7 @@ export interface Request {
   approver?: User;
   dispatcher?: User;
   items?: RequestItem[];
+  itemsCount: number,
 }
 
 export interface RequestItem {

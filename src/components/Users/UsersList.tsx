@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, User, Edit3, Trash2, School } from 'lucide-react';
 import { User as UserType } from '../../types';
-import { usersApi } from '../../services/mockApi';
+import { usersApi } from '../../services/api';
 
 const UsersList = () => {
   const [users, setUsers] = useState<UserType[]>([]);

@@ -217,3 +217,22 @@ LEFT JOIN users u2 ON r.approved_by = u2.id
 LEFT JOIN users u3 ON r.dispatched_by = u3.id
 LEFT JOIN request_items ri ON r.id = ri.request_id
 GROUP BY r.id, r.status, r.priority, r.created_at, u1.name, u1.school, u2.name, u3.name;
+
+
+ALTER TABLE request_items
+ADD COLUMN stock_updated BOOLEAN DEFAULT FALSE;
+
+DELIMITER //
+
+CREATE TRIGGER after_request_update
+AFTER UPDATE ON requests
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'despachado' THEN
+        UPDATE request_items
+        SET stock_updated = TRUE
+        WHERE request_id = NEW.id;
+    END IF;
+END//
+
+DELIMITER ;

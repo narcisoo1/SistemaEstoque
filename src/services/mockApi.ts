@@ -4,44 +4,86 @@ import {
   mockSuppliers, 
   mockRequests, 
   mockStockEntries,
-  currentUser,
-  setCurrentUser,
+  mockRequestItems,
   getLowStockMaterials,
   getRecentEntries,
   getRequestsByUser
 } from '../data/mockData';
-import { User, Material, Supplier, Request, StockEntry } from '../types';
+import { User, Material, Supplier, Request, StockEntry, RequestItem } from '../types';
 
 // Simulate API delay
 const delay = (ms: number = 500) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Session storage key
+const SESSION_KEY = 'inventory_session';
+
+// Session management
+let currentSession: { user: User; timestamp: number } | null = null;
+
+const saveSession = (user: User) => {
+  const session = {
+    user,
+    timestamp: Date.now()
+  };
+  currentSession = session;
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+};
+
+const getStoredSession = (): { user: User; timestamp: number } | null => {
+  if (currentSession) return currentSession;
+  
+  try {
+    const stored = sessionStorage.getItem(SESSION_KEY);
+    if (stored) {
+      const session = JSON.parse(stored);
+      // Verificar se a sessão não expirou (24 horas)
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (Date.now() - session.timestamp < twentyFourHours) {
+        currentSession = session;
+        return session;
+      } else {
+        // Sessão expirada
+        sessionStorage.removeItem(SESSION_KEY);
+      }
+    }
+  } catch (error) {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+  
+  return null;
+};
+
+const clearSession = () => {
+  currentSession = null;
+  sessionStorage.removeItem(SESSION_KEY);
+};
+
 // Auth API
 export const authApi = {
-  login: async (email: string, password: string): Promise<{ token: string; user: User } | null> => {
+  login: async (email: string, password: string): Promise<User | null> => {
     await delay();
     
     // Simple mock authentication - in real app, check password hash
     const user = mockUsers.find(u => u.email === email);
     
     if (user && password === 'password') {
-      setCurrentUser(user);
-      return {
-        token: 'mock-jwt-token-' + user.id,
-        user
-      };
+      saveSession(user);
+      return user;
     }
     
     return null;
   },
 
-  me: async (): Promise<User | null> => {
+  getSession: async (): Promise<User | null> => {
     await delay(200);
-    return currentUser;
+    
+    const session = getStoredSession();
+    return session ? session.user : null;
   },
 
   logout: async (): Promise<void> => {
     await delay(200);
-    // In real app, invalidate token
+    clearSession();
   }
 };
 
@@ -49,6 +91,11 @@ export const authApi = {
 export const dashboardApi = {
   getStats: async () => {
     await delay();
+    
+    const session = getStoredSession();
+    if (!session) throw new Error('Sessão inválida');
+    
+    const currentUser = session.user;
     
     const totalMaterials = mockMaterials.length;
     const lowStockItems = getLowStockMaterials().length;
@@ -89,20 +136,30 @@ export const dashboardApi = {
   }
 };
 
+// Helper function to get current user from session
+const getCurrentUser = (): User => {
+  const session = getStoredSession();
+  if (!session) throw new Error('Sessão inválida');
+  return session.user;
+};
+
 // Materials API
 export const materialsApi = {
   getAll: async (): Promise<Material[]> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     return [...mockMaterials];
   },
 
   getById: async (id: number): Promise<Material | null> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     return mockMaterials.find(m => m.id === id) || null;
   },
 
   create: async (data: Omit<Material, 'id' | 'createdAt' | 'updatedAt' | 'currentStock'>): Promise<Material> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const newMaterial: Material = {
       ...data,
@@ -118,6 +175,7 @@ export const materialsApi = {
 
   update: async (id: number, data: Partial<Material>): Promise<Material | null> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const index = mockMaterials.findIndex(m => m.id === id);
     if (index === -1) return null;
@@ -133,6 +191,7 @@ export const materialsApi = {
 
   delete: async (id: number): Promise<boolean> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const index = mockMaterials.findIndex(m => m.id === id);
     if (index === -1) return false;
@@ -146,11 +205,13 @@ export const materialsApi = {
 export const suppliersApi = {
   getAll: async (): Promise<Supplier[]> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     return [...mockSuppliers];
   },
 
   create: async (data: Omit<Supplier, 'id' | 'createdAt'>): Promise<Supplier> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const newSupplier: Supplier = {
       ...data,
@@ -164,6 +225,7 @@ export const suppliersApi = {
 
   update: async (id: number, data: Partial<Supplier>): Promise<Supplier | null> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const index = mockSuppliers.findIndex(s => s.id === id);
     if (index === -1) return null;
@@ -178,6 +240,7 @@ export const suppliersApi = {
 
   delete: async (id: number): Promise<boolean> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const index = mockSuppliers.findIndex(s => s.id === id);
     if (index === -1) return false;
@@ -191,6 +254,7 @@ export const suppliersApi = {
 export const requestsApi = {
   getAll: async (): Promise<Request[]> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     if (currentUser.role === 'solicitante') {
       return mockRequests.filter(r => r.requesterId === currentUser.id);
@@ -201,6 +265,7 @@ export const requestsApi = {
 
   getById: async (id: number): Promise<Request | null> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     const request = mockRequests.find(r => r.id === id);
     
@@ -214,40 +279,89 @@ export const requestsApi = {
     return request;
   },
 
-  create: async (data: Omit<Request, 'id' | 'createdAt' | 'updatedAt' | 'requester' | 'approver' | 'dispatcher'>): Promise<Request> => {
+  create: async (data: any): Promise<Request> => {
     await delay();
+    const currentUser = getCurrentUser();
+    
+    const newRequestId = Math.max(...mockRequests.map(r => r.id)) + 1;
     
     const newRequest: Request = {
-      ...data,
-      id: Math.max(...mockRequests.map(r => r.id)) + 1,
+      id: newRequestId,
       requesterId: currentUser.id,
       status: 'pendente',
+      priority: data.priority,
+      notes: data.notes,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       requester: currentUser
     };
     
+    // Create request items
+    const newItems: RequestItem[] = data.items.map((item: any, index: number) => ({
+      id: Math.max(...mockRequestItems.map(i => i.id), 0) + index + 1,
+      requestId: newRequestId,
+      materialId: item.materialId,
+      requestedQuantity: item.requestedQuantity,
+      notes: item.notes,
+      material: mockMaterials.find(m => m.id === item.materialId)
+    }));
+    
+    mockRequestItems.push(...newItems);
+    newRequest.items = newItems;
+    
     mockRequests.push(newRequest);
     return newRequest;
   },
 
-  update: async (id: number, data: Partial<Request>): Promise<Request | null> => {
+  update: async (id: number, data: any): Promise<Request | null> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     const index = mockRequests.findIndex(r => r.id === id);
     if (index === -1) return null;
     
+    const request = mockRequests[index];
+    
+    // Check permissions - only requester can edit pending requests
+    if (request.requesterId !== currentUser.id || request.status !== 'pendente') {
+      throw new Error('Não é possível editar esta solicitação');
+    }
+    
+    // Update request
     mockRequests[index] = {
-      ...mockRequests[index],
-      ...data,
+      ...request,
+      priority: data.priority,
+      notes: data.notes,
       updatedAt: new Date().toISOString()
     };
+    
+    // Remove old items
+    const oldItemsIndexes = mockRequestItems
+      .map((item, idx) => item.requestId === id ? idx : -1)
+      .filter(idx => idx !== -1)
+      .reverse(); // Remove from end to avoid index issues
+    
+    oldItemsIndexes.forEach(idx => mockRequestItems.splice(idx, 1));
+    
+    // Add new items
+    const newItems: RequestItem[] = data.items.map((item: any, index: number) => ({
+      id: Math.max(...mockRequestItems.map(i => i.id), 0) + index + 1,
+      requestId: id,
+      materialId: item.materialId,
+      requestedQuantity: item.requestedQuantity,
+      notes: item.notes,
+      material: mockMaterials.find(m => m.id === item.materialId)
+    }));
+    
+    mockRequestItems.push(...newItems);
+    mockRequests[index].items = newItems;
     
     return mockRequests[index];
   },
 
   approve: async (id: number, approvedItems: { materialId: number; approvedQuantity: number }[]): Promise<Request | null> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     const request = mockRequests.find(r => r.id === id);
     if (!request) return null;
@@ -265,6 +379,12 @@ export const requestsApi = {
         const approvedItem = approvedItems.find(ai => ai.materialId === item.materialId);
         if (approvedItem) {
           item.approvedQuantity = approvedItem.approvedQuantity;
+          
+          // Update in mockRequestItems as well
+          const mockItem = mockRequestItems.find(mi => mi.id === item.id);
+          if (mockItem) {
+            mockItem.approvedQuantity = approvedItem.approvedQuantity;
+          }
         }
       });
     }
@@ -274,6 +394,7 @@ export const requestsApi = {
 
   dispatch: async (id: number, dispatchedItems: { materialId: number; dispatchedQuantity: number }[]): Promise<Request | null> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     const request = mockRequests.find(r => r.id === id);
     if (!request) return null;
@@ -292,6 +413,12 @@ export const requestsApi = {
         if (dispatchedItem && item.material) {
           item.dispatchedQuantity = dispatchedItem.dispatchedQuantity;
           
+          // Update in mockRequestItems as well
+          const mockItem = mockRequestItems.find(mi => mi.id === item.id);
+          if (mockItem) {
+            mockItem.dispatchedQuantity = dispatchedItem.dispatchedQuantity;
+          }
+          
           // Update material stock
           const material = mockMaterials.find(m => m.id === item.materialId);
           if (material) {
@@ -307,6 +434,7 @@ export const requestsApi = {
 
   reject: async (id: number, reason: string): Promise<Request | null> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     const request = mockRequests.find(r => r.id === id);
     if (!request) return null;
@@ -326,11 +454,13 @@ export const requestsApi = {
 export const stockEntriesApi = {
   getAll: async (): Promise<StockEntry[]> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     return [...mockStockEntries];
   },
 
   create: async (data: Omit<StockEntry, 'id' | 'createdAt' | 'createdBy' | 'user'>): Promise<StockEntry> => {
     await delay();
+    const currentUser = getCurrentUser();
     
     const newEntry: StockEntry = {
       ...data,
@@ -356,11 +486,13 @@ export const stockEntriesApi = {
 export const usersApi = {
   getAll: async (): Promise<User[]> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     return [...mockUsers];
   },
 
   create: async (data: Omit<User, 'id' | 'createdAt'>): Promise<User> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const newUser: User = {
       ...data,
@@ -374,6 +506,7 @@ export const usersApi = {
 
   update: async (id: number, data: Partial<User>): Promise<User | null> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const index = mockUsers.findIndex(u => u.id === id);
     if (index === -1) return null;
@@ -388,6 +521,7 @@ export const usersApi = {
 
   delete: async (id: number): Promise<boolean> => {
     await delay();
+    getCurrentUser(); // Verificar sessão
     
     const index = mockUsers.findIndex(u => u.id === id);
     if (index === -1) return false;

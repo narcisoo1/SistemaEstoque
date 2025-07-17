@@ -1,24 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Eye, CheckCircle, XCircle, Truck, Clock, AlertCircle } from 'lucide-react';
+import { Plus, Search, Eye, CheckCircle, XCircle, Truck, Clock, AlertCircle, Edit3 } from 'lucide-react';
+import { Request } from '../../types';
+import { requestsApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-type RequestSummary = {
-  id: number;
-  status: string;
-  priority: string;
-  created_at: string;
-  notes: string | null;
-  requester_name: string;
-  school_name: string;
-  item_count: number;
-};
-
 const RequestsList = () => {
   const { user } = useAuth();
-  const [requests, setRequests] = useState<RequestSummary[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<RequestSummary[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -34,9 +25,24 @@ const RequestsList = () => {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch('http://localhost:3002/api/requests/summary');
-      const data = await response.json();
-      setRequests(data);
+      const response = await requestsApi.getAll();
+      // Mapeie os dados da API para o formato esperado pelo frontend
+      const mappedRequests = response.map((item: any) => ({
+        id: item.id,
+        status: item.status,
+        priority: item.priority,
+        notes: item.notes,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        requesterId: item.requester_id,
+        itemsCount: item.itemsCount,
+        requester: {
+          name: item.requester_name,
+          school: item.school
+        },
+        items: [] // Será carregado nos detalhes
+      }));
+      setRequests(mappedRequests);
     } catch (error) {
       console.error('Erro ao carregar solicitações:', error);
     } finally {
@@ -45,12 +51,12 @@ const RequestsList = () => {
   };
 
   const filterRequests = () => {
-    let filtered = [...requests];
+    let filtered = requests;
 
     if (searchTerm) {
       filtered = filtered.filter(request =>
-        request.requester_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.school_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        request.requester?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        request.requester?.school?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         request.notes?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -113,6 +119,10 @@ const RequestsList = () => {
     }
   };
 
+  const canEdit = (request: Request) => {
+    return request.requesterId === user?.id && request.status === 'pendente';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -139,7 +149,6 @@ const RequestsList = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {/* Filtros */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 lg:space-x-4">
             <div className="relative flex-1 max-w-md">
@@ -179,20 +188,33 @@ const RequestsList = () => {
           </div>
         </div>
 
-        {/* Tabela */}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitação</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Solicitação
+                </th>
                 {user?.role !== 'solicitante' && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solicitante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Solicitante
+                  </th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prioridade</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Itens</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Prioridade
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Data
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Itens
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -200,16 +222,26 @@ const RequestsList = () => {
                 <tr key={request.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">#{request.id.toString().padStart(4, '0')}</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        #{request.id.toString().padStart(4, '0')}
+                      </div>
                       {request.notes && (
-                        <div className="text-sm text-gray-500 truncate max-w-xs">{request.notes}</div>
+                        <div className="text-sm text-gray-500 truncate max-w-xs">
+                          {request.notes}
+                        </div>
                       )}
                     </div>
                   </td>
                   {user?.role !== 'solicitante' && (
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{request.requester_name}</div>
-                      <div className="text-sm text-gray-500">{request.school_name}</div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {request.requester?.name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {request.requester?.school}
+                        </div>
+                      </div>
                     </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -224,18 +256,30 @@ const RequestsList = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {format(new Date(request.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                    {format(new Date(request.createdAt), 'dd/MM/yyyy', { locale: ptBR })}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {request.item_count} itens
+                    {request.itemsCount || 0} itens
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => window.location.href = `/requests/${request.id}`}
-                      className="text-blue-600 hover:text-blue-900 p-1"
-                    >
-                      <Eye size={16} />
-                    </button>
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => window.location.href = `/requests/${request.id}`}
+                        className="text-blue-600 hover:text-blue-900 p-1"
+                        title="Ver detalhes"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      {canEdit(request) && (
+                        <button
+                          onClick={() => window.location.href = `/requests/${request.id}/edit`}
+                          className="text-green-600 hover:text-green-900 p-1"
+                          title="Editar"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

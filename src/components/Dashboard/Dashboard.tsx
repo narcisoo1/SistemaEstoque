@@ -8,7 +8,8 @@ import {
   Building2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { dashboardApi } from '../../services/mockApi';
+import { dashboardApi } from '../../services/api';
+
 
 interface DashboardStats {
   totalMaterials: number;
@@ -32,19 +33,20 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const stats = await dashboardApi.getStats();
+        setStats(stats);
+      } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchDashboardData();
   }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await dashboardApi.getStats();
-      setStats(response);
-    } catch (error) {
-      console.error('Erro ao carregar dados do dashboard:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();

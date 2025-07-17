@@ -439,7 +439,6 @@ export const mockStockEntries: StockEntry[] = [
 export let currentUser: User = mockUsers[0]; // Admin by default
 
 export const setCurrentUser = (user: User) => {
-  console.log('[DEBUG] setCurrentUser called with:', user);
   currentUser = user;
 };
 

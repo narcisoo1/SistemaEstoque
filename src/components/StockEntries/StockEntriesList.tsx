@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, TrendingUp, Package, Building2, User } from 'lucide-react';
 import { StockEntry, Material, Supplier } from '../../types';
-import { stockEntriesApi, materialsApi, suppliersApi } from '../../services/mockApi';
+import { stockEntriesApi, materialsApi, suppliersApi } from '../../services/api'; // Atualize o caminho para a API real
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -35,13 +35,33 @@ const StockEntriesList = () => {
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       const [entriesResponse, materialsResponse, suppliersResponse] = await Promise.all([
         stockEntriesApi.getAll(),
         materialsApi.getAll(),
         suppliersApi.getAll()
       ]);
       
-      setStockEntries(entriesResponse);
+      // Mapear os dados da API para o formato esperado pelo frontend
+      const mappedEntries = entriesResponse.map((entry: any) => ({
+        id: entry.id,
+        quantity: entry.quantity,
+        unitPrice: entry.unit_price,
+        totalPrice: entry.total_price,
+        batch: entry.batch || null,
+        expiryDate: entry.expiry_date || null,
+        notes: entry.notes || null,
+        createdAt: entry.created_at,
+        updatedAt: entry.updated_at,
+        createdUser: entry.created_by_name,
+        material: materialsResponse.find((m: Material) => m.id === entry.material_id),
+        supplier: suppliersResponse.find((s: Supplier) => s.id === entry.supplier_id),
+        materialId: entry.material_id,
+        supplierId: entry.supplier_id,
+        // Adicione outros campos conforme necessário
+      }));
+      
+      setStockEntries(mappedEntries);
       setMaterials(materialsResponse);
       setSuppliers(suppliersResponse);
     } catch (error) {
@@ -56,14 +76,14 @@ const StockEntriesList = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(entry =>
-        entry.material?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.batch?.toLowerCase().includes(searchTerm.toLowerCase())
+        (entry.material?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.supplier?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.batch?.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
     if (supplierFilter) {
-      filtered = filtered.filter(entry => entry.supplierId.toString() === supplierFilter);
+      filtered = filtered.filter(entry => entry.supplierId?.toString() === supplierFilter);
     }
 
     setFilteredEntries(filtered);
@@ -72,15 +92,18 @@ const StockEntriesList = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const material = materials.find(m => m.id === formData.materialId);
-      const supplier = suppliers.find(s => s.id === formData.supplierId);
-      
-      await stockEntriesApi.create({
-        ...formData,
-        expiryDate: formData.expiryDate || undefined,
-        material,
-        supplier
-      });
+      // Preparar os dados para a API
+      const payload = {
+        material_id: formData.materialId,
+        supplier_id: formData.supplierId,
+        quantity: formData.quantity,
+        unit_price: formData.unitPrice,
+        batch: formData.batch || null,
+        expiry_date: formData.expiryDate || null,
+        notes: formData.notes || null,
+      };
+
+      await stockEntriesApi.create(payload);
       
       setShowForm(false);
       setFormData({
@@ -92,9 +115,10 @@ const StockEntriesList = () => {
         expiryDate: '',
         notes: '',
       });
-      fetchData();
+      await fetchData(); // Recarregar os dados
     } catch (error) {
       console.error('Erro ao salvar entrada:', error);
+      // Adicione tratamento de erro adequado (ex: toast notification)
     }
   };
 
@@ -215,7 +239,7 @@ const StockEntriesList = () => {
                     {entry.quantity.toLocaleString()} {entry.material?.unit}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {entry.unitPrice ? `R$ ${entry.unitPrice.toFixed(2)}` : '-'}
+                    {entry.unitPrice ? `R$ ${entry.unitPrice}` : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {entry.batch || '-'}
@@ -226,7 +250,7 @@ const StockEntriesList = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <User className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900">{entry.user?.name}</span>
+                      <span className="text-sm text-gray-900">{entry.createdUser}</span>
                     </div>
                   </td>
                 </tr>
