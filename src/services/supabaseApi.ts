@@ -11,6 +11,24 @@ import {
 // Auth API
 export const authApi = {
   signIn: async (email: string, password: string) => {
+    // Para demonstração, verificar na tabela users
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .eq('password', password)
+      .single();
+    
+    if (userError || !user) {
+      throw new Error('Credenciais inválidas');
+    }
+    
+    // Simular sessão do Supabase Auth
+    sessionStorage.setItem('supabase_user', JSON.stringify(user));
+    
+    return { user };
+    
+    /* Em produção, usar:
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -18,9 +36,27 @@ export const authApi = {
     
     if (error) throw error;
     return data;
+    */
   },
 
   signUp: async (email: string, password: string, userData: { name: string; role?: string; school?: string }) => {
+    // Para demonstração, inserir diretamente na tabela users
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        name: userData.name,
+        email,
+        password,
+        role: userData.role || 'solicitante',
+        school: userData.school
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return { user: data };
+    
+    /* Em produção, usar:
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -31,20 +67,44 @@ export const authApi = {
     
     if (error) throw error;
     return data;
+    */
   },
 
   signOut: async () => {
+    // Para demonstração, limpar sessão local
+    sessionStorage.removeItem('supabase_user');
+    
+    /* Em produção, usar:
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    */
   },
 
   getSession: async () => {
+    // Para demonstração, recuperar da sessão local
+    const userStr = sessionStorage.getItem('supabase_user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      return { session: { user } };
+    }
+    return { session: null };
+    
+    /* Em produção, usar:
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
     return session;
+    */
   },
 
   getUser: async () => {
+    // Para demonstração, recuperar da sessão local
+    const userStr = sessionStorage.getItem('supabase_user');
+    if (userStr) {
+      return JSON.parse(userStr);
+    }
+    return null;
+    
+    /* Em produção, usar:
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) throw error;
     
@@ -61,6 +121,7 @@ export const authApi = {
     }
     
     return null;
+    */
   }
 };
 

@@ -73,11 +73,14 @@ npm run build
 
 O sistema vem com dados de exemplo pré-configurados:
 
-- **Administrador**: admin@educacao.gov.br
-- **Despachante**: carlos@educacao.gov.br  
-- **Solicitantes**: maria@escola1.edu.br, joao@escola2.edu.br
+- **Administrador**: admin@educacao.gov.br (senha: password)
+- **Despachante**: carlos@educacao.gov.br (senha: password)
+- **Solicitantes**: 
+  - maria@escola1.edu.br (senha: password)
+  - joao@escola2.edu.br (senha: password)
+  - ana@escola3.edu.br (senha: password)
 
-*Senha padrão para todos: `password`*
+**Importante**: Para demonstração, a autenticação está simplificada. Em produção, será usado o Supabase Auth completo.
 
 ## 🔐 Autenticação e Segurança
 
