@@ -36,7 +36,7 @@ const RequestDetails = () => {
 
   const fetchRequest = async () => {
     try {
-      const response = await requestsApi.getById(parseInt(id!));
+      const response = await requestsApi.getById(id!);
       // Mapeie os dados da API
       const mappedRequest = {
         id: response.id,
@@ -47,15 +47,11 @@ const RequestDetails = () => {
         updatedAt: response.updatedAt,
         requesterId: response.requesterId,
         requester: {
-          name: response.requester_name,
-          school: response.school
+          name: response.requester?.name,
+          school: response.requester?.school
         },
-        approver: response.approver ? { 
-          name: response.approvedBy 
-        } : undefined,
-        dispatcher: response.dispatcher ? { 
-          name: response.dispatchedBy 
-        } : undefined,
+        approver: response.approver,
+        dispatcher: response.dispatcher,
         approvedAt: response.approvedAt,
         dispatchedAt: response.dispatchedAt,
         items: response.items?.map((item: any) => ({
@@ -63,10 +59,10 @@ const RequestDetails = () => {
           materialId: item.material_id,
           material: {
             id: item.material_id,
-            name: item.material_name,
-            unit: item.unit,
-            category: item.category,
-            description: item.description
+            name: item.material?.name,
+            unit: item.material?.unit,
+            category: item.material?.category,
+            description: item.material?.description
           },
           requestedQuantity: item.requested_quantity,
           approvedQuantity: item.approved_quantity,
@@ -151,7 +147,7 @@ const RequestDetails = () => {
     try {
       await requestsApi.approve(
         request.id, 
-        user?.id || 0, 
+        user?.id || '', 
         request.items?.map(item => ({
           item_id: item.id,
           quantity: item.requestedQuantity
@@ -190,7 +186,7 @@ const RequestDetails = () => {
     try {
       await requestsApi.dispatch(
         request.id, 
-        user?.id || 0
+        user?.id || ''
       );
       fetchRequest();
     } catch (error) {

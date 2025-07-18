@@ -5,7 +5,8 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
-import api from '../services/api'; // API real usando axios
+import { authApi } from '../services/supabaseApi';
+import { supabase } from '../lib/supabase';
 import { User, AuthContextType } from '../types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,12 +29,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkSession();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          const user = await authApi.getUser();
+          setUser(user);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkSession = async () => {
     try {
-      const res = await api.get('/auth/me');
-      setUser(res.data);
+      const user = await authApi.getUser();
+      setUser(user);
     } catch (error) {
       setUser(null);
     } finally {
@@ -43,8 +59,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const res = await api.post('/auth/login', { email, password });
-      setUser(res.data.user);
+      await authApi.signIn(email, password);
+      const user = await authApi.getUser();
+      setUser(user);
       return true;
     } catch {
       return false;
@@ -53,7 +70,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await api.post('/auth/logout');
+      await authApi.signOut();
     } finally {
       setUser(null);
     }

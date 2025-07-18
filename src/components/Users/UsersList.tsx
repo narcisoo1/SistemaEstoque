@@ -90,7 +90,7 @@ const UsersList = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
       try {
         await usersApi.delete(id);

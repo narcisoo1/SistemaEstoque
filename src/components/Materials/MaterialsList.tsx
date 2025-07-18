@@ -111,7 +111,7 @@ const MaterialsList = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este material?')) {
       try {
         await materialsApi.delete(id);

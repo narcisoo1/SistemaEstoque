@@ -6,7 +6,7 @@ import { materialsApi, requestsApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface RequestFormItem {
-  materialId: number;
+  materialId: string;
   requestedQuantity: number;
   notes?: string;
   material?: Material;
@@ -29,7 +29,7 @@ const RequestForm = () => {
   });
 
   const [items, setItems] = useState<RequestFormItem[]>([
-    { materialId: 0, requestedQuantity: 0, notes: '' }
+    { materialId: '', requestedQuantity: 0, notes: '' }
   ]);
 
   useEffect(() => {
@@ -42,10 +42,10 @@ const RequestForm = () => {
       setMaterials(materialsResponse);
 
       if (isEditing && id) {
-        const requestResponse = await requestsApi.getById(parseInt(id));
+        const requestResponse = await requestsApi.getById(id);
         const mappedRequest = {
           ...requestResponse,
-          requesterId: requestResponse.requester_id,
+          requesterId: requestResponse.requester_id || requestResponse.requesterId,
           items: requestResponse.items.map((item: any) => ({
             id: item.id,
             materialId: item.material_id,
@@ -74,7 +74,7 @@ const RequestForm = () => {
 
 
   const addItem = () => {
-    setItems([...items, { materialId: 0, requestedQuantity: 0, notes: '' }]);
+    setItems([...items, { materialId: '', requestedQuantity: 0, notes: '' }]);
   };
 
   const removeItem = (index: number) => {
@@ -102,7 +102,7 @@ const RequestForm = () => {
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (!item.materialId || item.materialId === 0) {
+      if (!item.materialId || item.materialId === '') {
         return `Selecione um material para o item ${i + 1}`;
       }
       if (!item.requestedQuantity || item.requestedQuantity <= 0) {
@@ -133,7 +133,7 @@ const RequestForm = () => {
 
     try {
       const requestData = {
-        requester_id: user?.id || 0,
+        requester_id: user?.id || '',
         priority: formData.priority,
         notes: formData.notes,
         items: items.map(item => ({
@@ -144,7 +144,7 @@ const RequestForm = () => {
       };
 
       if (isEditing && id) {
-        await requestsApi.update(parseInt(id), requestData);
+        await requestsApi.update(id, requestData);
       } else {
         await requestsApi.create(requestData);
       }
@@ -317,11 +317,11 @@ const RequestForm = () => {
                     </label>
                     <select
                       value={item.materialId}
-                      onChange={(e) => updateItem(index, 'materialId', parseInt(e.target.value))}
+                     onChange={(e) => updateItem(index, 'materialId', e.target.value)}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
-                      <option value={0}>Selecione um material</option>
+                      <option value="">Selecione um material</option>
                       {materials
                         .filter(material => 
                           // Filtrar materiais já selecionados em outros itens

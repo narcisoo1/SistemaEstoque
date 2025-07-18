@@ -16,8 +16,8 @@ const StockEntriesList = () => {
   const [showForm, setShowForm] = useState(false);
 
   const [formData, setFormData] = useState({
-    materialId: 0,
-    supplierId: 0,
+    materialId: '',
+    supplierId: '',
     quantity: 0,
     unitPrice: 0,
     batch: '',
@@ -138,8 +138,8 @@ const StockEntriesList = () => {
           onClick={() => {
             setShowForm(true);
             setFormData({
-              materialId: 0,
-              supplierId: 0,
+              materialId: '',
+              supplierId: '',
               quantity: 0,
               unitPrice: 0,
               batch: '',
@@ -271,10 +271,10 @@ const StockEntriesList = () => {
                   <select
                     required
                     value={formData.materialId}
-                    onChange={(e) => setFormData({ ...formData, materialId: parseInt(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, materialId: e.target.value })}
                     className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value={0}>Selecione um material</option>
+                    <option value="">Selecione um material</option>
                     {materials.map((material) => (
                       <option key={material.id} value={material.id}>
                         {material.name} ({material.unit})
@@ -287,10 +287,10 @@ const StockEntriesList = () => {
                   <select
                     required
                     value={formData.supplierId}
-                    onChange={(e) => setFormData({ ...formData, supplierId: parseInt(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
                     className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value={0}>Selecione um fornecedor</option>
+                    <option value="">Selecione um fornecedor</option>
                     {suppliers.map((supplier) => (
                       <option key={supplier.id} value={supplier.id}>
                         {supplier.name}

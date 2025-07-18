@@ -82,7 +82,7 @@ const SuppliersList = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este fornecedor?')) {
       try {
         await suppliersApi.delete(id);
